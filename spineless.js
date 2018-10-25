@@ -1,4 +1,6 @@
 (function($) {
+  var pdfjsLib = window['pdfjs-dist/build/pdf'];
+  var pdfjsViewer = window['pdfjs-dist/web/pdf_viewer'];
 
   var DEFAULTS = {
     mosaic_w: 1000,
@@ -20,14 +22,34 @@
     this.opts = opts;
     this.pdf = pdf;
     this.doc = false;
+    this.pos = [0, 0];
     this.$el = $el;
     this.initMosaic();
     this.initViewer();
+    this.initNativeViewer();
     // arrays
     this.thumbs = [];
     this.pages = [];
     // initialize
     this.loadThumbs();
+  }
+
+  // This is a hidden native viewer to make use of PDF.js for searching
+  $.Spineless.prototype.initNativeViewer = function () {
+    var container = document.createElement("div");
+    var viewer = document.createElement("div");
+    this.setStyles({ display: 'hidden' }, container);
+    container.appendChild(viewer);
+    this.pdfViewer = new pdfjsViewer.PDFViewer({ 
+       container: container,
+       viewer: viewer
+    });
+    this.pdfFindController = new pdfjsViewer.PDFFindController({
+      pdfViewer: this.pdfViewer
+    });
+    this.pdfViewer.setFindController(this.pdfFindController);
+    this.pdfFindController.onUpdateResultsCount = this.onUpdateResultsCount.bind(this);
+    // this.pdfFindController.onUpdateState = this.onUpdateState.bind(this);
   }
 
   // make mosaic
@@ -73,9 +95,10 @@
   // make thumb
   $.Spineless.prototype.createThumb = function(pageNum) {
     var $div = document.createElement('div');
-    $div.setAttribute('data-page', pageNum + 1);
+    $div.setAttribute('data-page', pageNum);
     $div.className = 'blank';
     this.setStyles({ 
+      position: 'relative',
       backgroundColor: 'white',
       height: PARAMS.thumb_h + 'px',
       width: 0.7 * PARAMS.thumb_h + 'px', // estimate
@@ -90,11 +113,91 @@
     var $div = document.createElement('div');
     $div.className = 'blank';
     this.setStyles({ 
+      position: 'relative',
       backgroundColor: 'white',
       height: PARAMS.page_h + 'px',
       width: PARAMS.box_w + 'px' }, // estimate 
       $div);
     return $div;
+  }
+
+  // Clear all tint by color
+  $.Spineless.prototype.clearTint = function(color) {
+    document.querySelectorAll('.sr-' + color).forEach(function(ele){
+      ele.remove();
+    });
+  }
+
+  // Tint pageNum a certain color with some opacity. Color must be a word
+  $.Spineless.prototype.tint = function(pageNum, ratio, color) {
+    if (!isNaN(parseInt(pageNum)) && 
+        isFinite(pageNum) && 
+        !isNaN(parseFloat(ratio)) && 
+        isFinite(ratio)) {
+      var $thumb = this.thumbs[pageNum - 1];
+      var isNew = true;
+      /*
+      $thumb.getElementsByClassName('sr-' + color).forEach(function(ele){
+        this.setStyles({
+          opacity: 0.5 * ratio,
+        }, ele);
+        isNew = false;
+      });
+*/
+      if (isNew) {
+        var rect = $thumb.getBoundingClientRect();
+        var $div = document.createElement("div");
+        $div.className = 'sr-' + color;
+        this.setStyles({
+          top: 0,
+          left: 0,
+          width: rect.width + 'px',
+          height: rect.height + 'px',
+          backgroundColor: color,
+          position: 'absolute',
+          opacity: 0.5 * ratio,
+          zIndex: 10,
+          pointerEvents: 'none'
+        }, $div);
+        $thumb.appendChild($div);
+      }
+    }
+  }
+
+  $.Spineless.prototype.onUpdateResultsCount = function() {
+     var total = this.pdfFindController.matchCount;
+     this.clearTint('blue');
+     if (total > 0) {
+        var matches = this.pdfFindController.pageMatches;
+        var extremes = [0, 9999];
+        matches.forEach((pageMatches, i) => {
+          if (pageMatches.length > extremes[0]) {
+            extremes[0] = pageMatches.length;
+          }
+          if (pageMatches.length < extremes[1]) {
+            extremes[1] = pageMatches.length;
+          }
+        });
+        var range = extremes[0] - extremes[1];
+        matches.forEach((pageMatches, i) => {
+          var amount = pageMatches.length - extremes[1];
+          if (amount > 0) {
+            this.tint(i + 1, amount / range, 'blue');
+          }
+        });
+     }
+  }
+
+  // make mosaic
+  $.Spineless.prototype.search = function(query) {
+    console.log('searching for:', query);
+    this.pdfFindController.executeCommand('find', {
+      caseSensitive: false, 
+      findPrevious: undefined,
+      highlightAll: true, 
+      phraseSearch: true, 
+      query: query
+    });
   }
 
   // convenience function to set styles
@@ -119,12 +222,12 @@
 
   // Fits the page to the $ele height, adjusting the width based on the returned canvas
   $.Spineless.prototype.fitPage = function($ele, pageNum) {
-    var h = $ele.getBoundingClientRect().height;
-    return this.doc.getPage(pageNum).then(p => this.makePage(p, h))
+    $ele.className = 'p';
+    var h = $ele.getBoundingClientRect().height || parseFloat($ele.style.height);
+    return this.doc.getPage(pageNum + 1).then(p => this.makePage(p, h))
       .then(function (canvas) {
         $ele.style.width = canvas.width + 'px';
         $ele.appendChild(canvas);
-        $ele.className = 'page';
         return canvas;
     });
   }
@@ -143,29 +246,31 @@
   }
 
   // Move viewer box somewhere
-  $.Spineless.prototype.moveViewer = function(ele, offset) {
-    var rect = ele.getBoundingClientRect();
+  $.Spineless.prototype._moveViewer = function() {
+    var $thumb = this.getThumb();
+    var rect = $thumb.getBoundingClientRect();
     this.setStyles({
       display: 'block',
       top: rect.top + rect.height + 'px',
-      left: Math.min(window.innerWidth - PARAMS.box_w, parseInt(rect.left + offset * rect.width)) + 'px'
+      left: Math.min(window.innerWidth - PARAMS.box_w, parseInt(rect.left + this.pos[1] * rect.width)) + 'px'
     }, this.$viewer);
     return true;
   }
 
   // draw viewer scope box in the right place
-  $.Spineless.prototype.drawViewerScope = function(ele, y) {
-    var rect = ele.getBoundingClientRect();
+  $.Spineless.prototype._drawViewerScope = function() {
+    var $thumb = this.getThumb();
+    var rect = $thumb.getBoundingClientRect();
     var h = rect.height * (PARAMS.box_h / PARAMS.page_h);
     this.setStyles({
       left: rect.left + 'px',
-      top: parseInt(rect.top + y * rect.height) + 'px' }, 
+      top: parseInt(rect.top + this.pos[1] * rect.height) + 'px' }, 
       this.$viewerScope);
     this.$viewerScope.setAttribute("width", rect.width);
     this.$viewerScope.setAttribute("height", h);
     var ctx= this.$viewerScope.getContext("2d");
-    // ctx.strokeStyle = "red";
-    // ctx.lineWidth = 4;
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(ctx.canvas.clientWidth, 0);
@@ -179,42 +284,54 @@
     ctx.stroke();
   }
 
+  $.Spineless.prototype.renderViewer = function() {
+    if (this.doc) {
+      this._drawViewerScope();
+      this._moveViewer();
+      this.$viewer.scrollTop = (this.pos[0] + this.pos[1]) * PARAMS.page_h;
+    }
+  }
+
+  // Gets the thumb for the current position
+  $.Spineless.prototype.getThumb = function() {
+    return this.thumbs[this.pos[0]];
+  }
+
+  // Gets the thumb for the current position
+  $.Spineless.prototype.getPage = function() {
+    return this.pages[this.pos[0]];
+  }
+
   // Seek viewer to a particular location
-  $.Spineless.prototype.seek = function(pageNum) {
-    this.$viewer.scrollTop = pageNum * PARAMS.page_h;
+  $.Spineless.prototype.seek = function(page, offset) {
+    this.pos[0] = page;
+    this.pos[1] = offset;
+    var $page = this.getPage();
+    // @todo: pre-load adjacent pages for smoother reading
+    if (this.doc && $page.className == 'blank') {
+      return this.fitPage($page, this.pos[0])
+        .then(canvas => this.resizeViewer(canvas.width, true))
+        .then(() => this.renderViewer());
+    } else {
+      this.renderViewer();
+    }
     return true;
   }
 
   // Handle click into mosaic
   $.Spineless.prototype._handle_seek = function(e) {
-    var offset = (e.clientY - e.target.offsetTop)/e.target.clientHeight;
+    var offset = (e.offsetY - e.target.offsetTop)/e.target.clientHeight;
     var pageNum = parseInt(e.currentTarget.getAttribute('data-page'));
-    var nextPage = e.currentTarget.nextElementSibling;
+    // var nextPage = e.currentTarget.nextElementSibling;
     // console.log('page: ', pageNum, 'offset: ', offset);
-    var $page = this.pages[pageNum - 1];
-    var $thumb = this.thumbs[pageNum - 1];
-    this.moveViewer($thumb, 0);
-    if (this.doc && $page.className == 'blank') {
-      return this.fitPage($page, pageNum)
-        .then(canvas => this.resizeViewer(canvas.width, true))
-        .then(() => this.seek(pageNum - 1));
-    }
+    return this.seek(pageNum, offset);
   }
 
   $.Spineless.prototype._handle_scroll = function(ev) {
       var pageLoc = this.$viewer.scrollTop / PARAMS.page_h;
       var offset = pageLoc - Math.floor(pageLoc);
-      var pageNum = Math.floor(pageLoc) + 1;
-      // @todo: pre-load adjacent pages for smoother reading
-      var $page = this.pages[pageNum - 1];
-      var $thumb = this.thumbs[pageNum - 1];
-      if (this.doc && $page.className == 'blank') {
-        return this.fitPage($page, pageNum)
-        .then(canvas => this.resizeViewer(canvas.width, true));
-      }
-      // move box
-      this.drawViewerScope($thumb, offset);
-      this.moveViewer($thumb, offset);
+      var pageNum = Math.floor(pageLoc);
+      return this.seek(pageNum, offset);
   }
 
   // On initial load of pdf as thumbs
@@ -222,6 +339,7 @@
     var self = this;
     pdfjsLib.getDocument(this.pdf).promise.then(function (doc) {
       self.doc = doc;
+      self.pdfViewer.setDocument(doc);
       // pre-create divs
       console.log('PDF loaded, pages: ', doc.numPages);
       for (var i = 0; i < doc.numPages; i++) {

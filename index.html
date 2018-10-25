@@ -27,12 +27,22 @@ limitations under the License.
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.0.489/build/pdf.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.0.489/web/pdf_viewer.js"></script>
 </head>
 
 <body tabindex="1">
-</body>
+  <input id="query" size="30">
+  <button id="btn">search</button>
 <script src="spineless.js"></script>
 <script>
-despine(document.body, 'README.pdf', { mosaic_w: 1000 });
+var spineless = despine(document.body, 'README.pdf', { mosaic_w: 400 });
+
+function search() {
+  if (spineless) {
+    spineless.search(document.getElementById('query').value);
+  }
+}
+
+document.getElementById('btn').addEventListener('click', search);
 </script>
 </html>
