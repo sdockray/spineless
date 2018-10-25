@@ -81,9 +81,10 @@
       position: 'absolute' }, 
       this.$viewer);
     this.$viewer.onscroll = this._handle_scroll.bind(this);
+    this.$viewer.addEventListener('dblclick', this._handle_dblclick.bind(this), false);
     this.$el.appendChild(this.$viewer);
     // Also make scan box
-    this.$viewerScope = document.createElement("canvas");
+    this.$viewerScope = document.createElement('canvas');
     this.setStyles({ 
       position: 'absolute',
       left: 0,
@@ -95,9 +96,8 @@
   }
 
   // make thumb
-  $.Spineless.prototype.createThumb = function(pageNum) {
+  $.Spineless.prototype.createThumb = function() {
     var $div = document.createElement('div');
-    $div.setAttribute('data-page', pageNum);
     $div.className = 'blank';
     this.setStyles({ 
       position: 'relative',
@@ -111,8 +111,9 @@
   }
 
   // make page
-  $.Spineless.prototype.createPage = function() {
+  $.Spineless.prototype.createPage = function(pageNum) {
     var $div = document.createElement('div');
+    $div.setAttribute('data-page', pageNum);
     $div.className = 'blank';
     this.setStyles({ 
       position: 'relative',
@@ -239,7 +240,7 @@
   // draw page to fit into a variable width canvas of fixed height
   $.Spineless.prototype.makePage = function(page, height) {
     var vp = page.getViewport(1);
-    var canvas = document.createElement("canvas");
+    var canvas = document.createElement('canvas');
     canvas.height = height;
     var scale = canvas.height / vp.height;
     canvas.width = vp.width * scale;
@@ -257,6 +258,7 @@
     var h = $ele.getBoundingClientRect().height || parseFloat($ele.style.height);
     return this.doc.getPage(pageNum + 1).then(p => this.makePage(p, h))
       .then(function (canvas) {
+        canvas.setAttribute('data-page', pageNum);
         $ele.style.width = canvas.width + 'px';
         $ele.appendChild(canvas);
         return canvas;
@@ -333,6 +335,67 @@
     return this.pages[this.pos[0]];
   }
 
+  // gets x, y position within the focus for an event
+  $.Spineless.prototype._x_y = function(e) {
+    return { 
+      page: parseInt(e.target.getAttribute('data-page')),
+      x: e.offsetX / e.target.width, 
+      y: e.offsetY / e.target.height
+    };
+  }
+
+  // Handle click into mosaic
+  $.Spineless.prototype._handle_seek = function(e) {
+    var offset = (e.offsetY - e.target.offsetTop)/e.target.clientHeight;
+    var pageNum = parseInt(e.target.getAttribute('data-page'));
+    // var nextPage = e.currentTarget.nextElementSibling;
+    // console.log('page: ', pageNum, 'offset: ', offset);
+    return this.seek(pageNum, offset);
+  }
+
+  $.Spineless.prototype._handle_scroll = function(ev) {
+      var pageLoc = this.$viewer.scrollTop / PARAMS.page_h;
+      var offset = pageLoc - Math.floor(pageLoc);
+      var pageNum = Math.floor(pageLoc);
+      return this.seek(pageNum, offset);
+  }
+
+  $.Spineless.prototype._handle_dblclick = function(ev) {
+    ev.preventDefault();
+    var ev2 = new CustomEvent('pointer', {
+        detail: this._x_y(ev)
+    });
+    this.$el.dispatchEvent(ev2);
+  } 
+
+  // On initial load of pdf as thumbs
+  $.Spineless.prototype.loadThumbs = function() {
+    var self = this;
+    pdfjsLib.getDocument(this.pdf).promise.then(function (doc) {
+      self.doc = doc;
+      self.pdfViewer.setDocument(doc);
+      // pre-create divs
+      console.log('PDF loaded, pages: ', doc.numPages);
+      for (var i = 0; i < doc.numPages; i++) {
+        var $thumb = self.createThumb();
+        self.$mosaic.appendChild($thumb);
+        self.thumbs.push($thumb);
+
+        var $page = self.createPage();
+        self.$viewer.appendChild($page);
+        self.pages.push($page);
+      }
+      // load pages as images from pdf
+      return Promise.all(self.thumbs.map(function (div, num) {
+        // create a div for each page and build a small canvas for it
+        return self.fitPage(div, num);
+      }));
+      return true;
+    }).catch(console.error);
+  }
+
+  // These are the methods that are of interest to the outside
+  
   // Seek viewer to a particular location
   $.Spineless.prototype.seek = function(page, offset) {
     this.pos[0] = page;
@@ -347,49 +410,29 @@
       this.renderViewer();
     }
     return true;
-  }
+  }  
 
-  // Handle click into mosaic
-  $.Spineless.prototype._handle_seek = function(e) {
-    var offset = (e.offsetY - e.target.offsetTop)/e.target.clientHeight;
-    var pageNum = parseInt(e.currentTarget.getAttribute('data-page'));
-    // var nextPage = e.currentTarget.nextElementSibling;
-    // console.log('page: ', pageNum, 'offset: ', offset);
-    return this.seek(pageNum, offset);
-  }
-
-  $.Spineless.prototype._handle_scroll = function(ev) {
-      var pageLoc = this.$viewer.scrollTop / PARAMS.page_h;
-      var offset = pageLoc - Math.floor(pageLoc);
-      var pageNum = Math.floor(pageLoc);
-      return this.seek(pageNum, offset);
-  }
-
-  // On initial load of pdf as thumbs
-  $.Spineless.prototype.loadThumbs = function() {
-    var self = this;
-    pdfjsLib.getDocument(this.pdf).promise.then(function (doc) {
-      self.doc = doc;
-      self.pdfViewer.setDocument(doc);
-      // pre-create divs
-      console.log('PDF loaded, pages: ', doc.numPages);
-      for (var i = 0; i < doc.numPages; i++) {
-        var $thumb = self.createThumb(i);
-        self.$mosaic.appendChild($thumb);
-        self.thumbs.push($thumb);
-
-        var $page = self.createPage();
-        self.$viewer.appendChild($page);
-        self.pages.push($page);
-      }
-      // load pages as images from pdf
-      return Promise.all(self.thumbs.map(function (div) {
-        // create a div for each page and build a small canvas for it
-        var num = parseInt(div.getAttribute('data-page'));
-        return self.fitPage(div, num);
-      }));
-      return true;
-    }).catch(console.error);
+  // Place a pointer in a particular location on a page
+  // @todo allow a callback for what to render instead of a colored square
+  $.Spineless.prototype.pointer = function(pageNum, x, y, opts, cb) {
+    var opts = opts || {};
+    var $div = document.createElement('div');
+    var c = opts.color || 'red';
+    var $page = this.pages[pageNum];
+    var rect = $page.getBoundingClientRect();
+    $div.className = 'pointer';
+    this.setStyles({
+      position: 'absolute',
+      top: y * rect.height - 5 + 'px',
+      left: x * rect.width - 5 + 'px',
+      width: 10 + 'px',
+      height: 10 + 'px',
+      backgroundColor: c,
+    }, $div);
+    $page.appendChild($div);
+    $div.addEventListener('click', function(e) {
+      cb(e);
+    });
   }
 
 })(window);
