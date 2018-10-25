@@ -7,7 +7,8 @@
     thumb_h: 72,
     page_h: 1000,
     box_h: 300,
-    box_w: 500
+    box_w: 500,
+    colors: ['yellow', 'green', 'red']
   }
   var PARAMS = {}
 
@@ -18,6 +19,7 @@
     PARAMS.page_h = opts.page_h || DEFAULTS.page_h,
     PARAMS.box_h = opts.box_h || DEFAULTS.box_h;
     PARAMS.box_w = opts.box_w || DEFAULTS.box_w;
+    PARAMS.colors = opts.colors || DEFAULTS.colors;
     // 
     this.opts = opts;
     this.pdf = pdf;
@@ -49,7 +51,7 @@
     });
     this.pdfViewer.setFindController(this.pdfFindController);
     this.pdfFindController.onUpdateResultsCount = this.onUpdateResultsCount.bind(this);
-    // this.pdfFindController.onUpdateState = this.onUpdateState.bind(this);
+    this.pdfFindController.onUpdateState = this.onUpdateState.bind(this);
   }
 
   // make mosaic
@@ -121,6 +123,11 @@
     return $div;
   }
 
+  // Clear all tints
+  $.Spineless.prototype.clearTints = function() {
+    PARAMS.colors.forEach(c => clearTint(c));
+  }
+
   // Clear all tint by color
   $.Spineless.prototype.clearTint = function(color) {
     document.querySelectorAll('.sr-' + color).forEach(function(ele){
@@ -136,14 +143,6 @@
         isFinite(ratio)) {
       var $thumb = this.thumbs[pageNum - 1];
       var isNew = true;
-      /*
-      $thumb.getElementsByClassName('sr-' + color).forEach(function(ele){
-        this.setStyles({
-          opacity: 0.5 * ratio,
-        }, ele);
-        isNew = false;
-      });
-*/
       if (isNew) {
         var rect = $thumb.getBoundingClientRect();
         var $div = document.createElement("div");
@@ -164,40 +163,71 @@
     }
   }
 
+  $.Spineless.prototype.onUpdateState = function(s) {
+    // console.log('state: ', s);
+  }
+
   $.Spineless.prototype.onUpdateResultsCount = function() {
-     var total = this.pdfFindController.matchCount;
-     this.clearTint('blue');
-     if (total > 0) {
-        var matches = this.pdfFindController.pageMatches;
-        var extremes = [0, 9999];
-        matches.forEach((pageMatches, i) => {
-          if (pageMatches.length > extremes[0]) {
-            extremes[0] = pageMatches.length;
-          }
-          if (pageMatches.length < extremes[1]) {
-            extremes[1] = pageMatches.length;
-          }
-        });
-        var range = extremes[0] - extremes[1];
-        matches.forEach((pageMatches, i) => {
-          var amount = pageMatches.length - extremes[1];
-          if (amount > 0) {
-            this.tint(i + 1, amount / range, 'blue');
-          }
-        });
-     }
+    var query = this.pdfFindController.state.query;
+    var qi = this.queries.indexOf(query);
+    var total = this.pdfFindController.matchCount;
+    if (total > 0 && qi >= 0) {
+      var color = PARAMS.colors[qi];
+      this.clearTint(color);
+      var matches = this.pdfFindController.pageMatches;
+      var extremes = [0, 9999];
+      matches.forEach((pageMatches, i) => {
+        if (pageMatches.length > extremes[0]) {
+          extremes[0] = pageMatches.length;
+        }
+        if (pageMatches.length < extremes[1]) {
+          extremes[1] = pageMatches.length;
+        }
+      });
+      var range = extremes[0] - extremes[1];
+      matches.forEach((pageMatches, i) => {
+        var amount = pageMatches.length - extremes[1];
+        if (amount > 0) {
+          this.tint(i + 1, amount / range, color);
+        }
+      });
+    }
+    // Move on to the next query
+    if (!Object.keys(this.pdfFindController.pendingFindMatches).length) {
+      this._searchNext();
+    } else {
+      setTimeout(() => {
+        if (this.pdfFindController.matchCount == total) {
+          this._searchNext();
+        }
+      }, 250);
+    }
+  }
+
+  // make mosaic
+  $.Spineless.prototype._searchNext = function() {
+    if (this.queryIndex < this.queries.length - 1 &&
+        this.queryIndex < PARAMS.colors.length - 1) {
+      this.queryIndex += 1;
+      console.log('searching: ', this.queries[this.queryIndex]);
+      this.pdfFindController.executeCommand('find', {
+        caseSensitive: false, 
+        findPrevious: undefined,
+        highlightAll: true, 
+        phraseSearch: true, 
+        query: this.queries[this.queryIndex]
+      });
+    }
   }
 
   // make mosaic
   $.Spineless.prototype.search = function(query) {
-    console.log('searching for:', query);
-    this.pdfFindController.executeCommand('find', {
-      caseSensitive: false, 
-      findPrevious: undefined,
-      highlightAll: true, 
-      phraseSearch: true, 
-      query: query
-    });
+    var terms = query.split(',');
+    // @todo: trim terms?
+    this.queryIndex = -1;
+    this.queries = terms;
+    this.queriesDone = [];
+    this._searchNext();
   }
 
   // convenience function to set styles
