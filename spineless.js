@@ -8,7 +8,7 @@
     page_h: 1000,
     box_h: 300,
     box_w: 500,
-    colors: ['yellow', 'green', 'red']
+    colors: ['yellow', 'blue', 'red']
   }
   var PARAMS = {}
 
@@ -227,6 +227,7 @@
     this.queryIndex = -1;
     this.queries = terms;
     this.queriesDone = [];
+    this.clearTints();
     this._searchNext();
   }
 
