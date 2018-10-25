@@ -27,12 +27,29 @@ limitations under the License.
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.0.489/build/pdf.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.0.489/web/pdf_viewer.js"></script>
 </head>
 
 <body tabindex="1">
+  <!-- these are for the search -->
+  <input id="query" size="30">
+  <button id="btn">search</button>
 </body>
 <script src="spineless.js"></script>
 <script>
-despine(document.body, 'README.pdf', { mosaic_w: 1000 });
+var spineless = despine(document.body, 'README.pdf', { mosaic_w: 400 });
+// How to use event listeners
+spineless.$el.addEventListener('pointer', function(e) {
+  spineless.pointer(e.detail.page, e.detail.x, e.detail.y, null, function(e2) {
+    alert('I am on page ' + e.detail.page);
+  });
+});
+// Search demo
+function search() {
+  if (spineless) {
+    spineless.search(document.getElementById('query').value);
+  }
+}
+document.getElementById('btn').addEventListener('click', search);
 </script>
 </html>
