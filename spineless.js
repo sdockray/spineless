@@ -125,7 +125,7 @@
 
   // Clear all tints
   $.Spineless.prototype.clearTints = function() {
-    PARAMS.colors.forEach(c => clearTint(c));
+    PARAMS.colors.forEach(c => this.clearTint(c));
   }
 
   // Clear all tint by color
