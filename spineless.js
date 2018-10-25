@@ -192,7 +192,7 @@
         }
       });
     }
-    // Move on to the next query
+    // Move on to the next query (there's no good way i can find to tell if the search is done)
     if (!Object.keys(this.pdfFindController.pendingFindMatches).length) {
       this._searchNext();
     } else {
@@ -200,7 +200,7 @@
         if (this.pdfFindController.matchCount == total) {
           this._searchNext();
         }
-      }, 250);
+      }, 10 * this.thumbs.length); // wait based on length of pdf
     }
   }
 
