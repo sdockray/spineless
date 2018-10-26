@@ -34,6 +34,7 @@ limitations under the License.
   <!-- these are for the search -->
   <input id="query" size="30">
   <button id="btn">search</button>
+  <button id="btn2">seek page 3.5</button>
 </body>
 <script src="spineless.js"></script>
 <script>
@@ -58,6 +59,13 @@ function search() {
     spineless.search(document.getElementById('query').value);
   }
 }
+// Seek demo
+function seek() {
+  if (spineless) {
+    spineless.seek(3, 0.5);
+  }
+}
 document.getElementById('btn').addEventListener('click', search);
+document.getElementById('btn2').addEventListener('click', seek);
 </script>
 </html>
