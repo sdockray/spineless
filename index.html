@@ -38,11 +38,19 @@ limitations under the License.
 <script src="spineless.js"></script>
 <script>
 var spineless = despine(document.body, 'README.pdf', { mosaic_w: 400 });
-// How to use event listeners
+// How to use event listeners:
+// Double clicking on a page
 spineless.$el.addEventListener('pointer', function(e) {
-  spineless.pointer(e.detail.page, e.detail.x, e.detail.y, null, function(e2) {
+  // e.detail is: { page, x, y }
+  spineless.pointer(e.detail, null, function(e2) {
     alert('I am on page ' + e.detail.page);
   });
+});
+// Dragging a selection on a page
+spineless.$el.addEventListener('excerpt', function(e) {
+  // begin and end are: { page, x, y } and ele is a canvas
+  spineless.keepHighlight();
+  console.log( e.detail.begin, e.detail.end, e.detail.ele );
 });
 // Search demo
 function search() {
