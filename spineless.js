@@ -359,6 +359,13 @@
   $.Spineless.prototype._handle_seek = function(e) {
     var offset = (e.offsetY - e.target.offsetTop)/e.target.clientHeight;
     var pageNum = parseInt(e.target.getAttribute('data-page'));
+    // Allow dragging the mouse here
+    window.onmousemove = this._handle_seek.bind(this);
+    window.onmouseup = function() {
+      console.log("up");
+      window.onmousemove = undefined;
+      window.onmouseup = undefined;
+    }    
     // var nextPage = e.currentTarget.nextElementSibling;
     // console.log('page: ', pageNum, 'offset: ', offset);
     return this.seek(pageNum, offset);
