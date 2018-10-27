@@ -26,6 +26,7 @@
     this.doc = false;
     this.pos = [0, 0];
     this.$el = $el;
+    this.hls = false;
     this.initMosaic();
     this.initViewer();
     this.initNativeViewer();
@@ -33,7 +34,7 @@
     this.thumbs = [];
     this.pages = [];
     // initialize
-    this.loadThumbs();
+    this._loadThumbs();
   }
 
   // This is a hidden native viewer to make use of PDF.js for searching
@@ -82,6 +83,9 @@
       this.$viewer);
     this.$viewer.onscroll = this._handle_scroll.bind(this);
     this.$viewer.addEventListener('dblclick', this._handle_dblclick.bind(this), false);
+    this.$viewer.onmousedown = this._handle_highlight_start.bind(this);
+    this.$viewer.onmouseup = this._handle_highlight_end.bind(this);
+    this.$viewer.onmousemove = this._handle_highlight_drag.bind(this);
     this.$el.appendChild(this.$viewer);
     // Also make scan box
     this.$viewerScope = document.createElement('canvas');
@@ -111,9 +115,8 @@
   }
 
   // make page
-  $.Spineless.prototype.createPage = function(pageNum) {
+  $.Spineless.prototype.createPage = function() {
     var $div = document.createElement('div');
-    $div.setAttribute('data-page', pageNum);
     $div.className = 'blank';
     this.setStyles({ 
       position: 'relative',
@@ -368,8 +371,49 @@
     this.$el.dispatchEvent(ev2);
   } 
 
+  $.Spineless.prototype._handle_highlight_start = function(ev) {
+    ev.preventDefault();
+    this.hls = this._x_y(ev);
+    if (this.newHighlight) {
+      this.newHighlight.remove();
+      this.newHighlight = false;
+    }
+    return false;
+  }
+
+  $.Spineless.prototype._handle_highlight_drag = function(ev) {
+    if (this.hls) {
+      // draw a temporary highlight box
+      var hle = this._x_y(ev);
+      this.newHighlight = this.highlight(this.hls, hle, { active: this.newHighlight });
+    }
+  }
+
+
+  $.Spineless.prototype._handle_highlight_end = function(ev) {
+    ev.preventDefault();
+    var hle = this._x_y(ev);
+    if (this.hls && (
+        this.hls.page != hle.page || 
+        Math.abs( this.hls.x - hle.x) > .1 || // is it big enough?
+        Math.abs( this.hls.y - hle.y ) > .02 
+      )) {
+      //this.newHighlight = this.highlight(this.hls, hle, { active: this.newHighlight });
+      var ev2 = new CustomEvent('excerpt', {
+        detail: {
+          begin: this.hls,
+          end: hle,
+          ele: this.newHighlight
+        }
+      });
+      this.$el.dispatchEvent(ev2);
+    }
+    this.hls = false;
+    return false;
+  }
+
   // On initial load of pdf as thumbs
-  $.Spineless.prototype.loadThumbs = function() {
+  $.Spineless.prototype._loadThumbs = function() {
     var self = this;
     pdfjsLib.getDocument(this.pdf).promise.then(function (doc) {
       self.doc = doc;
@@ -414,17 +458,17 @@
 
   // Place a pointer in a particular location on a page
   // @todo allow a callback for what to render instead of a colored square
-  $.Spineless.prototype.pointer = function(pageNum, x, y, opts, cb) {
+  $.Spineless.prototype.pointer = function(pos, opts, cb) {
     var opts = opts || {};
     var $div = document.createElement('div');
     var c = opts.color || 'red';
-    var $page = this.pages[pageNum];
+    var $page = this.pages[pos.page];
     var rect = $page.getBoundingClientRect();
     $div.className = 'pointer';
     this.setStyles({
       position: 'absolute',
-      top: y * rect.height - 5 + 'px',
-      left: x * rect.width - 5 + 'px',
+      top: pos.y * rect.height - 5 + 'px',
+      left: pos.x * rect.width - 5 + 'px',
       width: 10 + 'px',
       height: 10 + 'px',
       backgroundColor: c,
@@ -433,6 +477,51 @@
     $div.addEventListener('click', function(e) {
       cb(e);
     });
+  }
+
+  // points a and b should be { page, x, y }
+  $.Spineless.prototype.keepHighlight = function() {
+    this.newHighlight = false;
+  }
+
+  // points a and b should be { page, x, y }
+  $.Spineless.prototype.highlight = function(a, b, opts) {
+    var opts = opts || {};
+    var canvas = opts.active || false;
+    var c = opts.color || 'yellow';
+    var $pageA = this.pages[a.page];
+    var $pageB = this.pages[b.page];
+    if (!$pageA || !$pageB) {
+      return canvas;
+    }
+    var aRect = $pageA.getBoundingClientRect();
+    var bRect = $pageB.getBoundingClientRect();
+    var ay = $pageA.offsetTop + a.y * aRect.height;
+    var by = $pageB.offsetTop + b.y * bRect.height;
+    if (!canvas) {
+      canvas = document.createElement('canvas'); 
+      canvas.className = 'hl'; 
+      this.setStyles({
+        position: 'absolute',
+        zIndex: 7,
+        pointerEvents: 'none'
+      }, canvas);
+      this.$viewer.appendChild(canvas);
+    }
+    this.setStyles({
+      top: Math.min(ay, by) + 'px',
+      left: '0px'
+    }, canvas);
+    canvas.width = Math.max(aRect.width, bRect.width);
+    canvas.height = Math.abs(ay - by);
+    // draw the shape
+    // @todo: some refinement in the shape?
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "yellow";
+    ctx.globalAlpha = 0.3;
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.fill();
+    return canvas;
   }
 
 })(window);
