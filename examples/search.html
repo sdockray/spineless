@@ -16,13 +16,14 @@ limitations under the License.
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="google" content="notranslate">
-  <title>spineless demo</title>
+  <title>spineless demo (search)</title>
 
   <style>
     body {
       background-color: #808080;
       margin: 0 0 20px 0;
       padding: 0;
+      color: #FFF;
     }
   </style>
 
@@ -31,42 +32,19 @@ limitations under the License.
 </head>
 
 <body tabindex="1">
-  <!-- these are for the search -->
+  <p>use commas to search for multiple terms</p>
   <input id="query" size="30">
   <button id="btn">search</button>
-  <button id="btn2">seek page 3.5</button>
 </body>
-<script src="spineless.js"></script>
+<script src="../spineless.js"></script>
 <script>
-var spineless = despine(document.body, 'README.pdf', { mosaic_w: 400 });
-// How to use event listeners:
-// Double clicking on a page
-spineless.$el.addEventListener('pointer', function(e) {
-  // e.detail is: { page, x, y }
-  spineless.pointer(e.detail, null, function(e2) {
-    alert('I am on page ' + e.detail.page);
-  });
-});
-// Dragging a selection on a page
-spineless.$el.addEventListener('excerpt', function(e) {
-  // begin and end are: { page, x, y } and ele is a canvas
-  spineless.keepHighlight();
-  // spineless.highlight(e.detail.begin, e.detail.end) // to draw programmatically
-  console.log( e.detail.begin, e.detail.end, e.detail.ele );
-});
+var spineless = despine(document.body, '../README.pdf', { mosaic_w: 200, box_h: 800, stationary: true });
 // Search demo
 function search() {
   if (spineless) {
     spineless.search(document.getElementById('query').value);
   }
-}
-// Seek demo
-function seek() {
-  if (spineless) {
-    spineless.seek(3, 0.5);
-  }
-}
+} 
 document.getElementById('btn').addEventListener('click', search);
-document.getElementById('btn2').addEventListener('click', seek);
 </script>
 </html>

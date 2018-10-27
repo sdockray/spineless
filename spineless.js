@@ -81,7 +81,8 @@
       overflow: 'auto',
       resize: 'both', 
       zIndex: 2, 
-      display: 'none',
+      display: (PARAMS.stationary) ? 'block' : 'none',
+      border: '1px solid red',
       position: (PARAMS.stationary) ? 'relative' : 'absolute' }, 
       this.$viewer);
     this.$viewer.onscroll = this._handle_scroll.bind(this);
@@ -408,12 +409,11 @@
   $.Spineless.prototype._handle_highlight_end = function(ev) {
     ev.preventDefault();
     var hle = this._x_y(ev);
-    if (this.hls && (
+    if (this.hls && this.hls.page && hle.page && (
         this.hls.page != hle.page || 
         Math.abs( this.hls.x - hle.x) > .1 || // is it big enough?
         Math.abs( this.hls.y - hle.y ) > .02 
       )) {
-      //this.newHighlight = this.highlight(this.hls, hle, { active: this.newHighlight });
       var ev2 = new CustomEvent('excerpt', {
         detail: {
           begin: this.hls,
