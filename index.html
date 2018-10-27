@@ -51,6 +51,7 @@ spineless.$el.addEventListener('pointer', function(e) {
 spineless.$el.addEventListener('excerpt', function(e) {
   // begin and end are: { page, x, y } and ele is a canvas
   spineless.keepHighlight();
+  // spineless.highlight(e.detail.begin, e.detail.end) // to draw programmatically
   console.log( e.detail.begin, e.detail.end, e.detail.ele );
 });
 // Search demo
