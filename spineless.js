@@ -8,7 +8,8 @@
     page_h: 1000,
     box_h: 300,
     box_w: 500,
-    colors: ['yellow', 'blue', 'red']
+    colors: ['yellow', 'blue', 'red'],
+    stationary: false 
   }
   var PARAMS = {}
 
@@ -20,6 +21,8 @@
     PARAMS.box_h = opts.box_h || DEFAULTS.box_h;
     PARAMS.box_w = opts.box_w || DEFAULTS.box_w;
     PARAMS.colors = opts.colors || DEFAULTS.colors;
+    PARAMS.stationary = opts.stationary || DEFAULTS.stationary;
+    
     // 
     this.opts = opts;
     this.pdf = pdf;
@@ -79,7 +82,7 @@
       resize: 'both', 
       zIndex: 2, 
       display: 'none',
-      position: 'absolute' }, 
+      position: (PARAMS.stationary) ? 'relative' : 'absolute' }, 
       this.$viewer);
     this.$viewer.onscroll = this._handle_scroll.bind(this);
     this.$viewer.addEventListener('dblclick', this._handle_dblclick.bind(this), false);
@@ -224,17 +227,6 @@
     }
   }
 
-  // make mosaic
-  $.Spineless.prototype.search = function(query) {
-    var terms = query.split(',');
-    // @todo: trim terms?
-    this.queryIndex = -1;
-    this.queries = terms;
-    this.queriesDone = [];
-    this.clearTints();
-    this._searchNext();
-  }
-
   // convenience function to set styles
   $.Spineless.prototype.setStyles = function(styles, element){
     Object.assign(element.style, styles);
@@ -268,6 +260,19 @@
     });
   }
 
+  // Prepares a page for viewing
+  $.Spineless.prototype._preparePage = function(page) {
+    if (page >= 0 && page < this.pages.length) {
+      var $page = this.pages[page];
+      // @todo: pre-load adjacent pages for smoother reading
+      if (this.doc && $page.className == 'blank') {
+        return this.fitPage($page, page)
+          .then(canvas => this.resizeViewer(canvas.width, true));
+      }
+    }
+    return Promise.resolve(false);
+  } 
+
   // resize viewer width
   $.Spineless.prototype.resizeViewer = function(width, enlargeOnly) {
     if (enlargeOnly) {
@@ -285,11 +290,14 @@
   $.Spineless.prototype._moveViewer = function() {
     var $thumb = this.getThumb();
     var rect = $thumb.getBoundingClientRect();
-    this.setStyles({
-      display: 'block',
-      top: rect.top + rect.height + 'px',
-      left: Math.min(window.innerWidth - PARAMS.box_w, parseInt(rect.left + this.pos[1] * rect.width)) + 'px'
-    }, this.$viewer);
+    var styles = { display: 'block' };
+    if (!PARAMS.stationary) {
+      styles = Object.assign({
+        top: rect.top + rect.height + 'px',
+        left: Math.min(window.innerWidth - PARAMS.box_w, parseInt(rect.left + this.pos[1] * rect.width)) + 'px'
+      }, styles);
+    }
+    this.setStyles(styles, this.$viewer);
     return true;
   }
 
@@ -439,22 +447,29 @@
   }
 
   // These are the methods that are of interest to the outside
-  
+
   // Seek viewer to a particular location
   $.Spineless.prototype.seek = function(page, offset) {
     this.pos[0] = page;
     this.pos[1] = offset;
-    var $page = this.getPage();
-    // @todo: pre-load adjacent pages for smoother reading
-    if (this.doc && $page.className == 'blank') {
-      return this.fitPage($page, this.pos[0])
-        .then(canvas => this.resizeViewer(canvas.width, true))
-        .then(() => this.renderViewer());
-    } else {
-      this.renderViewer();
-    }
-    return true;
+    return this._preparePage(this.pos[0])
+      .then(() => {
+        this.renderViewer();
+        this._preparePage(this.pos[0] + 1);
+        this._preparePage(this.pos[0] - 1);
+      });
   }  
+
+  // make mosaic
+  $.Spineless.prototype.search = function(query) {
+    var terms = query.split(',');
+    // @todo: trim terms?
+    this.queryIndex = -1;
+    this.queries = terms;
+    this.queriesDone = [];
+    this.clearTints();
+    this._searchNext();
+  }
 
   // Place a pointer in a particular location on a page
   // @todo allow a callback for what to render instead of a colored square
