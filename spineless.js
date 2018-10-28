@@ -374,7 +374,6 @@
     // Allow dragging the mouse here
     window.onmousemove = this._handle_seek.bind(this);
     window.onmouseup = function() {
-      console.log("up");
       window.onmousemove = undefined;
       window.onmouseup = undefined;
     }    
@@ -528,26 +527,27 @@
     var opts = opts || {};
     var canvas = opts.active || false;
     var c = opts.color || 'yellow';
+    // The page probably needs preloading
     var $pageA = this.pages[a.page];
     var $pageB = this.pages[b.page];
     if (!$pageA || !$pageB) {
       return canvas;
+    }
+    if (!canvas) {
+      canvas = document.createElement('canvas'); 
+      canvas.className = 'hl'; 
+      this.setStyles({
+        position: 'absolute',
+        zIndex: 7,
+        pointerEvents: 'none'
+      }, canvas);
+      this.$viewer.appendChild(canvas);
     }
     this._preparePage(a.page).then(() => {
       var aRect = $pageA.getBoundingClientRect();
       var bRect = $pageB.getBoundingClientRect();
       var ay = $pageA.offsetTop + a.y * aRect.height;
       var by = $pageB.offsetTop + b.y * bRect.height;
-      if (!canvas) {
-        canvas = document.createElement('canvas'); 
-        canvas.className = 'hl'; 
-        this.setStyles({
-          position: 'absolute',
-          zIndex: 7,
-          pointerEvents: 'none'
-        }, canvas);
-        this.$viewer.appendChild(canvas);
-      }
       this.setStyles({
         top: Math.min(ay, by) + 'px',
         left: '0px'
@@ -561,8 +561,8 @@
       ctx.globalAlpha = 0.3;
       ctx.rect(0, 0, canvas.width, canvas.height);
       ctx.fill();
-      return canvas;
     });
+    return canvas;
   }
 
   // scroll into focus
