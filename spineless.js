@@ -301,43 +301,48 @@
   // Move viewer box somewhere
   $.Spineless.prototype._moveViewer = function() {
     var $thumb = this.getThumb();
-    var rect = $thumb.getBoundingClientRect();
-    var styles = { display: 'block' };
-    if (!PARAMS.stationary) {
-      styles = Object.assign({
-        top: rect.top + rect.height + 'px',
-        left: Math.min(window.innerWidth - PARAMS.box_w, parseInt(rect.left + this.pos[1] * rect.width)) + 'px'
-      }, styles);
+    if ($thumb) {
+      var rect = $thumb.getBoundingClientRect();
+      var styles = { display: 'block' };
+      if (!PARAMS.stationary) {
+        styles = Object.assign({
+          top: rect.top + rect.height + 'px',
+          left: Math.min(window.innerWidth - PARAMS.box_w, parseInt(rect.left + this.pos[1] * rect.width)) + 'px'
+        }, styles);
+      }
+      this.setStyles(styles, this.$viewer);
     }
-    this.setStyles(styles, this.$viewer);
     return true;
   }
 
   // draw viewer scope box in the right place
   $.Spineless.prototype._drawViewerScope = function() {
     var $thumb = this.getThumb();
-    var rect = $thumb.getBoundingClientRect();
-    var h = rect.height * (PARAMS.box_h / PARAMS.page_h);
-    this.setStyles({
-      left: rect.left + 'px',
-      top: parseInt(rect.top + this.pos[1] * rect.height) + 'px' }, 
-      this.$viewerScope);
-    this.$viewerScope.setAttribute("width", rect.width);
-    this.$viewerScope.setAttribute("height", h);
-    var ctx= this.$viewerScope.getContext("2d");
-    ctx.strokeStyle = "red";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(ctx.canvas.clientWidth, 0);
-    ctx.stroke();
-    ctx.strokeStyle = "red";
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.3;
-    ctx.lineTo(ctx.canvas.clientWidth, ctx.canvas.clientHeight);
-    ctx.lineTo(0, ctx.canvas.clientHeight);
-    ctx.lineTo(0, 0);
-    ctx.stroke();
+    if ($thumb) {
+      var rect = $thumb.getBoundingClientRect();
+      var top = parseInt($thumb.offsetTop + this.pos[1] * rect.height);
+      var h = Math.min(rect.height * (PARAMS.box_h / PARAMS.page_h), (1 - this.pos[1]) * rect.height);
+      this.setStyles({
+        left: rect.left + 'px',
+        top: top + 'px' }, 
+        this.$viewerScope);
+      this.$viewerScope.setAttribute("width", rect.width);
+      this.$viewerScope.setAttribute("height", h);
+      var ctx= this.$viewerScope.getContext("2d");
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(ctx.canvas.clientWidth, 0);
+      ctx.stroke();
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.3;
+      ctx.lineTo(ctx.canvas.clientWidth, ctx.canvas.clientHeight);
+      ctx.lineTo(0, ctx.canvas.clientHeight);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+    }
   }
 
   $.Spineless.prototype.renderViewer = function() {
@@ -471,12 +476,14 @@
   $.Spineless.prototype.seek = function(page, offset) {
     this.pos[0] = page;
     this.pos[1] = offset;
-    return this._preparePage(this.pos[0])
-      .then(() => {
-        this.renderViewer();
-        this._preparePage(this.pos[0] + 1);
-        this._preparePage(this.pos[0] - 1);
-      });
+    if (page && page >= 0 && page < this.pages.length) {
+      return this._preparePage(this.pos[0])
+        .then(() => {
+          this.renderViewer();
+          this._preparePage(this.pos[0] + 1);
+          this._preparePage(this.pos[0] - 1);
+        });
+    }
   }  
 
   // make mosaic
