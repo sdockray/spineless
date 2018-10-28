@@ -36,7 +36,7 @@ limitations under the License.
 </body>
 <script src="../spineless.js"></script>
 <script>
-var spineless = despine(document.body, 'README.pdf', { mosaic_w: 500, box_h: 800 });
+var spineless = despine(document.body, 'README.pdf', { mosaic_w: 200, box_h: 800, stationary: true });
 // Double clicking on a page
 spineless.$el.addEventListener('pointer', function(e) {
   console.log(e.detail);
