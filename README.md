@@ -1,6 +1,6 @@
 # spineless
 
-This is a different way of reading PDFs. [View a demo!](https://rawgit.com/sdockray/spineless/master/index.html)
+This is a different way of reading PDFs. [View some examples!](https://rawgit.com/sdockray/spineless/master/examples/index.html)
 
 ## how to use it
 
