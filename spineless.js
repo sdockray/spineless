@@ -9,7 +9,8 @@
     box_h: 300,
     box_w: 500,
     colors: ['yellow', 'blue', 'red'],
-    stationary: false 
+    stationary: false,
+    searchable: false
   }
   var PARAMS = {}
 
@@ -22,6 +23,7 @@
     PARAMS.box_w = opts.box_w || DEFAULTS.box_w;
     PARAMS.colors = opts.colors || DEFAULTS.colors;
     PARAMS.stationary = opts.stationary || DEFAULTS.stationary;
+    PARAMS.searchable = opts.searchable || DEFAULTS.searchable;
     
     // 
     this.opts = opts;
@@ -32,12 +34,21 @@
     this.hls = false;
     this.initMosaic();
     this.initViewer();
-    this.initNativeViewer();
+    if (PARAMS.searchable) {
+      this.initNativeViewer();
+    }
     // arrays
     this.thumbs = [];
     this.pages = [];
+  }
+
+  $.Spineless.prototype.init = function() {
     // initialize
-    this._loadThumbs();
+    return this._loadThumbs()
+      .then(() => {
+        var e = new CustomEvent('loaded');
+        this.$el.dispatchEvent(e);
+      });
   }
 
   // This is a hidden native viewer to make use of PDF.js for searching
@@ -430,9 +441,11 @@
   // On initial load of pdf as thumbs
   $.Spineless.prototype._loadThumbs = function() {
     var self = this;
-    pdfjsLib.getDocument(this.pdf).promise.then(function (doc) {
+    return pdfjsLib.getDocument(this.pdf).promise.then(function (doc) {
       self.doc = doc;
-      self.pdfViewer.setDocument(doc);
+      if (PARAMS.searchable) {
+        self.pdfViewer.setDocument(doc);
+      }
       // pre-create divs
       console.log('PDF loaded, pages: ', doc.numPages);
       for (var i = 0; i < doc.numPages; i++) {
@@ -449,8 +462,8 @@
         // create a div for each page and build a small canvas for it
         return self.fitPage(div, num);
       }));
-      return true;
     }).catch(console.error);
+    return Promise.resolve(false);
   }
 
   // These are the methods that are of interest to the outside
@@ -469,13 +482,15 @@
 
   // make mosaic
   $.Spineless.prototype.search = function(query) {
-    var terms = query.split(',');
-    // @todo: trim terms?
-    this.queryIndex = -1;
-    this.queries = terms;
-    this.queriesDone = [];
-    this.clearTints();
-    this._searchNext();
+    if (PARAMS.searchable) {
+      var terms = query.split(',');
+      // @todo: trim terms?
+      this.queryIndex = -1;
+      this.queries = terms;
+      this.queriesDone = [];
+      this.clearTints();
+      this._searchNext();
+    }
   }
 
   // Place a pointer in a particular location on a page
@@ -485,19 +500,21 @@
     var $div = document.createElement('div');
     var c = opts.color || 'red';
     var $page = this.pages[pos.page];
-    var rect = $page.getBoundingClientRect();
-    $div.className = 'pointer';
-    this.setStyles({
-      position: 'absolute',
-      top: pos.y * rect.height - 5 + 'px',
-      left: pos.x * rect.width - 5 + 'px',
-      width: 10 + 'px',
-      height: 10 + 'px',
-      backgroundColor: c,
-    }, $div);
-    $page.appendChild($div);
-    $div.addEventListener('click', function(e) {
-      cb(e);
+    this._preparePage(pos.page).then(() => {
+      var rect = $page.getBoundingClientRect();
+      $div.className = 'pointer';
+      this.setStyles({
+        position: 'absolute',
+        top: pos.y * rect.height - 5 + 'px',
+        left: pos.x * rect.width - 5 + 'px',
+        width: 10 + 'px',
+        height: 10 + 'px',
+        backgroundColor: c,
+      }, $div);
+      $page.appendChild($div);
+      $div.addEventListener('click', function(e) {
+        cb(e);
+      });
     });
   }
 
@@ -516,42 +533,52 @@
     if (!$pageA || !$pageB) {
       return canvas;
     }
-    var aRect = $pageA.getBoundingClientRect();
-    var bRect = $pageB.getBoundingClientRect();
-    var ay = $pageA.offsetTop + a.y * aRect.height;
-    var by = $pageB.offsetTop + b.y * bRect.height;
-    if (!canvas) {
-      canvas = document.createElement('canvas'); 
-      canvas.className = 'hl'; 
+    this._preparePage(a.page).then(() => {
+      var aRect = $pageA.getBoundingClientRect();
+      var bRect = $pageB.getBoundingClientRect();
+      var ay = $pageA.offsetTop + a.y * aRect.height;
+      var by = $pageB.offsetTop + b.y * bRect.height;
+      if (!canvas) {
+        canvas = document.createElement('canvas'); 
+        canvas.className = 'hl'; 
+        this.setStyles({
+          position: 'absolute',
+          zIndex: 7,
+          pointerEvents: 'none'
+        }, canvas);
+        this.$viewer.appendChild(canvas);
+      }
       this.setStyles({
-        position: 'absolute',
-        zIndex: 7,
-        pointerEvents: 'none'
+        top: Math.min(ay, by) + 'px',
+        left: '0px'
       }, canvas);
-      this.$viewer.appendChild(canvas);
-    }
-    this.setStyles({
-      top: Math.min(ay, by) + 'px',
-      left: '0px'
-    }, canvas);
-    canvas.width = Math.max(aRect.width, bRect.width);
-    canvas.height = Math.abs(ay - by);
-    // draw the shape
-    // @todo: some refinement in the shape?
-    var ctx = canvas.getContext("2d");
-    ctx.fillStyle = "yellow";
-    ctx.globalAlpha = 0.3;
-    ctx.rect(0, 0, canvas.width, canvas.height);
-    ctx.fill();
-    return canvas;
+      canvas.width = Math.max(aRect.width, bRect.width);
+      canvas.height = Math.abs(ay - by);
+      // draw the shape
+      // @todo: some refinement in the shape?
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "yellow";
+      ctx.globalAlpha = 0.3;
+      ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.fill();
+      return canvas;
+    });
+  }
+
+  // scroll into focus
+  $.Spineless.prototype.focus = function() {
+    this.$el.scrollIntoView();
+    window.scrollBy(this.$el.offsetLeft, 0);
   }
 
 })(window);
 
 
 function despine($parent, pdf, opts) {
-    var div = document.createElement('div');
-    $parent.appendChild(div);
-    var spineless = new Spineless(div, pdf, opts || {} );
+    var $div = document.createElement('div');
+    $div.style.cssText = "position: relative; display:inline-block; float:left;";
+    $parent.appendChild($div);
+    var spineless = new Spineless($div, pdf, opts || {} );
+    spineless.init();
     return spineless;
 }

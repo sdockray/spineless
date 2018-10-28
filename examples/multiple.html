@@ -16,13 +16,15 @@ limitations under the License.
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="google" content="notranslate">
-  <title>spineless demo (basic)</title>
+  <title>spineless demo (multiple)</title>
 
   <style>
     body {
       background-color: #808080;
       margin: 0 0 20px 0;
       padding: 0;
+      color: #FFF;
+      width: 10000px;
     }
   </style>
 
@@ -31,9 +33,37 @@ limitations under the License.
 </head>
 
 <body tabindex="1">
+  <p>
+  <button id="btn1">show cross-reference on page 12</button>
+  </p>
 </body>
 <script src="../spineless.js"></script>
 <script>
-var spineless = despine(document.body, 'README.pdf', { mosaic_w: 400 });
+var spineless = {};
+
+spineless['README.pdf'] = despine(document.body, 'README.pdf', { mosaic_w: 200, box_h: 800, stationary: true });
+spineless['README.pdf'].$el.addEventListener('loaded', function(e) {
+  // Place a pointer with some interactivity
+  spineless['README.pdf'].pointer({page: 11, x: 0.6643059490084986, y: 0.336}, {}, function(e) {
+    spineless['health.pdf'].seek(5, 0.785 - 0.1);
+    spineless['health.pdf'].focus();
+  });
+});
+
+spineless['health.pdf'] = despine(document.body, 'health.pdf', { mosaic_w: 200, box_h: 800, stationary: true });
+spineless['health.pdf'].$el.addEventListener('loaded', function(e) {
+  // Place a highlight
+  spineless['health.pdf'].highlight(
+    {page: 5, x: 0.030666666666666665, y: 0.769}, 
+    {page: 5, x: 0.964, y: 0.938}
+  );
+});
+
+function seek() {
+  spineless['README.pdf'].seek(11, 0.15);
+}
+
+document.getElementById('btn1').addEventListener('click', seek);
+
 </script>
 </html>
